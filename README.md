@@ -2,11 +2,17 @@
   <img src="sql-spark-connector-icon.svg" alt="Apache Spark Connector for SQL Server and Azure SQL" width="150"/>
 </p>
 
-# Important Notice (Feb 2025)
+# This is a repo to give LTS for the SQL-connector for SPARK
+
+This connector in many cases for our customers is a way better solution then the built in JDBC for Databricks, so we need to use it in performance critical scenarios for MSSQL server, like loading very large datasets to PBI efficiently. The process for loading, DBX-MSSQL-PBI is extrem less resource intensive for the PBI resource and for this cases many times faster then the large loading from the Databricks SQL endpoint. The issues is the segment creation capability of PBI, and in general that the SQL server capacity is a way cheaper resource then the PBI computing capacity. This way the more efficient segment compression between MSSQL to PBI is making it more economical then the DBX-SQL to PBI workflow. Direct connection from DBX to MSSQL is also a lot faster for reading and writing then the native DBX built in resource due to MPP model of the SPARK connector.
+
+This readme file contains lot of content from the original project, some for the build added.
+
+## Important Notice (Feb 2025) No official MS support, the last supported DBX version was 14.3 LTS
 This project is no longer maintained. For any interested parties, please feel free to fork and maintain it on GitHub.
 
 # Apache Spark Connector for SQL Server and Azure SQL
-Born out of Microsoft’s SQL Server Big Data Clusters investments, the Apache Spark Connector for SQL Server and Azure SQL is a high-performance connector that enables you to use transactional data in big data analytics and persists results for ad-hoc queries or reporting. The connector allows you to use any SQL database, on-premises or in the cloud, as an input data source or output data sink for Spark jobs.
+Born out of Microsoft's SQL Server Big Data Clusters investments, the Apache Spark Connector for SQL Server and Azure SQL is a high-performance connector that enables you to use transactional data in big data analytics and persists results for ad-hoc queries or reporting. The connector allows you to use any SQL database, on-premises or in the cloud, as an input data source or output data sink for Spark jobs.
 
 This library contains the source code for the Apache Spark Connector for SQL Server and Azure SQL.
 
@@ -21,6 +27,7 @@ There are three version sets of the connector available through Maven, a 2.4.x, 
 | Spark 3.1.x compatible connector | `com.microsoft.azure:spark-mssql-connector_2.12:1.2.0` | 2.12          |
 | Spark 3.3.x compatible connector | `com.microsoft.azure:spark-mssql-connector_2.12:1.3.0` | 2.12          |
 | Spark 3.4.x compatible connector | `com.microsoft.azure:spark-mssql-connector_2.12:1.4.0` | 2.12          |
+| Spark 3.5.x compatible connector | `com.microsoft.azure:spark-mssql-connector_2.12:1.5.0` | 2.12          |
 
 ## Current Releases
 
@@ -32,6 +39,86 @@ The latest Spark 3.1.x compatible connector is on v1.2.0.
 
 For main changes from previous releases and known issues please refer to [CHANGELIST](docs/CHANGELIST.md)
 
+## Databricks Runtime 15.4 LTS Compatibility
+
+This fork adds support for **Databricks Runtime 15.4 LTS** (Spark 3.5.1, Scala 2.12.15). The following changes were made to enable compatibility.
+
+### Changes Summary
+
+#### `pom.xml`
+- Added a new `spark35` Maven profile (active by default) targeting Spark 3.5.1, Scala 2.12.15
+- The original `spark34` profile is retained for backward compatibility
+- `maven-compiler-plugin` updated to 3.13.0, source/target set to Java 8 (`1.8`) — DBR 15.4 LTS executes JARs on a Java 8 JVM despite using a newer toolchain
+- `scala-maven-plugin` downgraded to 4.8.1 to avoid pulling in `sbt-compiler-bridge 1.10.0` which was compiled with Java 11 (class file version 55.0) and is incompatible with the cluster's Java 8 runtime
+- `-target:jvm-1.8` added as a Scala compiler argument to ensure Java 8 bytecode output
+- `scalatest-maven-plugin` updated to 2.2.0
+- `scalatest` dependency updated to 3.2.18
+- `maven-javadoc-plugin` updated to 3.6.3
+- `mssql-jdbc` updated to `12.6.1.jre8` (the `jre8` classifier is required — `jre11` produces class file version 55.0 which the cluster rejects)
+
+#### `BulkCopyUtils.scala`
+- `JdbcUtils.getSchema` is called via reflection to handle the breaking API change between Databricks and open-source Spark. Databricks Runtime 15.4 LTS uses a custom 5-parameter signature `getSchema(Connection, ResultSet, JdbcDialect, Boolean, Boolean)` that does not exist in any published open-source Spark release. The connector detects the available signature at runtime and calls the correct overload:
+
+  | Runtime | Parameters | Signature |
+  |---|---|---|
+  | Databricks Runtime 15.4 LTS | 5 | `(Connection, ResultSet, JdbcDialect, false, false)` |
+  | Spark 3.5 open-source | 2 | `(ResultSet, JdbcDialect)` |
+  | Spark 3.4 open-source | 3 | `(ResultSet, JdbcDialect, false)` |
+
+### Building for Databricks Runtime 15.4 LTS
+
+**Prerequisites:**
+- Java 8 JDK (e.g. [Azul Zulu 8](https://www.azul.com/downloads/)) — must use Java 8 to compile, not Java 11 or later
+- Maven 3.6+
+
+**Set JAVA_HOME to your Java 8 JDK before building:**
+```powershell
+# Windows (PowerShell) — adjust path to your JDK 8 install location
+$env:JAVA_HOME = "C:\Program Files\Zulu\zulu-8"
+$env:Path = "$env:JAVA_HOME\bin;" + $env:Path
+mvn -version  # should show Java version: 1.8.x
+```
+
+**Build:**
+```powershell
+mvn package "-DskipTests" "-Dgpg.skip=true" -Pspark35
+```
+
+The output JAR will be at `target/spark-mssql-connector-X.X.X.jar`.
+
+**Verify the bytecode version is Java 8 (52.0):**
+```powershell
+javap -verbose -classpath target\spark-mssql-connector-1.4.0.jar com.microsoft.sqlserver.jdbc.spark.ColumnMetadata | findstr "major version"
+# Expected: major version: 52
+```
+
+**Build for legacy Spark 3.4:**
+```powershell
+mvn package "-DskipTests" "-Dgpg.skip=true" -Pspark34
+```
+
+### Known Issues and Fixes
+
+#### `java.lang.NoSuchMethodError: JdbcUtils$.getSchema`
+Databricks Runtime uses a forked internal Spark build where `JdbcUtils.getSchema` has a different signature than open-source Spark. This is handled via runtime reflection in `BulkCopyUtils.scala` — no action required if using this fork.
+
+#### `java.lang.UnsupportedClassVersionError: class file version 55.0`
+The JAR or one of its dependencies was compiled with Java 11. Ensure:
+- Your `JAVA_HOME` points to a Java 8 JDK when building
+- You are using `mssql-jdbc` with the `jre8` classifier, not `jre11`
+- `scala-maven-plugin` is on version `4.8.1` (not `4.9.x` which pulls in a Java 11 compiler bridge)
+
+#### `[WARNING] The requested profile "spark35" could not be activated`
+Your local `pom.xml` does not contain the `spark35` profile — you are running against the original unmodified file. Replace it with the updated `pom.xml` from this fork.
+
+#### PowerShell: `Unknown lifecycle phase ".skip=true"`
+PowerShell splits `-D` flags at the `=` sign. Wrap each flag in quotes:
+```powershell
+mvn package "-DskipTests" "-Dgpg.skip=true" -Pspark35
+```
+
+---
+
 ## Supported Features
 * Support for all Spark bindings (Scala, Python, R)
 * Basic authentication and Active Directory (AD) Key Tab support
@@ -40,13 +127,14 @@ For main changes from previous releases and known issues please refer to [CHANGE
 * Reliable connector support for Sql Server Single Instance
 
 
-| Component                            | Versions Supported         |
-|--------------------------------------|----------------------------|
-| Apache Spark                         | 2.4.x, 3.0.x, 3.1.x, 3.3.x |
-| Scala                                | 2.11, 2.12                 |
-| Microsoft JDBC Driver for SQL Server | 8.4.1                      |
-| Microsoft SQL Server                 | SQL Server 2008 or later   |
-| Azure SQL Databases                  | Supported                  |
+| Component                            | Versions Supported                  |
+|--------------------------------------|-------------------------------------|
+| Apache Spark                         | 2.4.x, 3.0.x, 3.1.x, 3.3.x, 3.5.x |
+| Scala                                | 2.11, 2.12                          |
+| Microsoft JDBC Driver for SQL Server | 8.4.1 (Spark 3.4), 12.6.1 (Spark 3.5) |
+| Microsoft SQL Server                 | SQL Server 2008 or later            |
+| Azure SQL Databases                  | Supported                           |
+| Databricks Runtime                   | 15.4 LTS (Spark 3.5.1)             |
 
 *Note: Azure Synapse (Azure SQL DW) use is not tested with this connector. While it may work, there may be unintended consequences.*
 
@@ -94,7 +182,7 @@ This issue arises from using an older version of the mssql driver (which is now 
 
 Steps to fix the issue:
 
-1. If you are using a generic Hadoop environment, check and remove the mssql jar: `rm $HADOOP_HOME/share/hadoop/yarn/lib/mssql-jdbc-6.2.1.jre7.jar`. 
+1. If you are using a generic Hadoop environment, check and remove the mssql jar: `rm $HADOOP_HOME/share/hadoop/yarn/lib/mssql-jdbc-6.2.1.jre7.jar`.
 If you are using Databricks, add a global or cluster init script to remove old versions of the mssql driver from the `/databricks/jars` folder, or add this line to an existing script: `rm /databricks/jars/*mssql*`
 2. Add the `adal4j` and `mssql` packages, I used Maven, but anyway should work. DO NOT install the SQL spark connector this way.
 3. Add the driver class to your connection configuration:
@@ -117,7 +205,7 @@ To include the connector in your projects download this repository and build the
 
 #### Receiving `java.lang.NoClassDefFoundError` when trying to use the new connector with Azure Databricks?
 
-If you are migrating from the previous Azure SQL Connector for Spark and have manually installed drivers onto that cluster for AAD compatibility, you will most likely need to remove those custom drivers, restore the previous drivers that ship by default with Databricks, uninstall the previous connector, and restart your cluster.  You may be better off spinning up a new cluster. 
+If you are migrating from the previous Azure SQL Connector for Spark and have manually installed drivers onto that cluster for AAD compatibility, you will most likely need to remove those custom drivers, restore the previous drivers that ship by default with Databricks, uninstall the previous connector, and restart your cluster.  You may be better off spinning up a new cluster.
 
 With this new connector, you should be able to simply install onto a cluster (new or existing cluster that hasn't had its drivers modified) or a cluster which previously used modified drivers for the older Azure SQL Connector for Spark provided the modified drivers were removed and the previous default drivers restored.
 
@@ -226,7 +314,7 @@ Active Directory.
 
 For **Scala,** the `com.microsoft.aad.adal4j` artifact will need to be installed.
 
-For **Python,** the `adal` library will need to be installed.  This is available 
+For **Python,** the `adal` library will need to be installed.  This is available
 via pip.
 
 

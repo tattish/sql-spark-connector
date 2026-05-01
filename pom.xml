@@ -4,7 +4,7 @@
     <groupId>com.microsoft.azure</groupId>
     <artifactId>spark-mssql-connector</artifactId>
     <packaging>jar</packaging>
-    <version>1.4.0</version>
+    <version>1.5.0</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>The Apache Spark Connector for SQL Server and Azure SQL is a high-performance connector that enables you to use transactional data in big data analytics and persists results for ad-hoc queries or reporting.</description>
     <url>https://github.com/microsoft/sql-spark-connector</url>
@@ -101,7 +101,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.6.3</version>
                 <executions>
                     <execution>
                     <id>attach-javadocs</id>
@@ -125,10 +125,10 @@
                     </execution>
                 </executions>
             </plugin>
-            
+
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.7.0</version>
+                <version>3.13.0</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -137,13 +137,21 @@
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
-                <version>4.4.0</version>
+                <version>4.8.1</version>
                 <configuration>
                     <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
                     <scalaVersion>${scala.version}</scalaVersion>
+                    <compilerPlugins>
+                    </compilerPlugins>
+                    <!-- Pin compiler bridge to Java 8 compatible version (55.0 = Java 11, 52.0 = Java 8) -->
+                    <compilerVersion>2.12.15</compilerVersion>
+                    <zinc>
+                        <version>1.9.6</version>
+                    </zinc>
                     <args>
                         <arg>-deprecation</arg>
                         <arg>-feature</arg>
+                        <arg>-target:jvm-1.8</arg>
                     </args>
                 </configuration>
                 <executions>
@@ -181,7 +189,7 @@
             <plugin>
                 <groupId>org.scalatest</groupId>
                 <artifactId>scalatest-maven-plugin</artifactId>
-                <version>1.0</version>
+                <version>2.2.0</version>
                 <configuration>
                     <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
                     <junitxml>.</junitxml>
@@ -200,11 +208,34 @@
         </plugins>
     </build>
     <profiles>
+        <!-- Databricks Runtime 15.4 LTS: Spark 3.5.1, Scala 2.12.15, Java 8 runtime (despite JDK 11 toolchain) -->
         <profile>
-            <id>spark34</id>
+            <id>spark35</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
+            <properties>
+                <scala.binary.version>2.12</scala.binary.version>
+                <scala.version>2.12.15</scala.version>
+                <spark.version>3.5.1</spark.version>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.scalatest</groupId>
+                    <artifactId>scalatest_${scala.binary.version}</artifactId>
+                    <version>3.2.18</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>com.microsoft.sqlserver</groupId>
+                    <artifactId>mssql-jdbc</artifactId>
+                    <version>12.6.1.jre8</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- Legacy: Spark 3.4.0, Scala 2.12.11, Java 8 -->
+        <profile>
+            <id>spark34</id>
             <properties>
                 <scala.binary.version>2.12</scala.binary.version>
                 <scala.version>2.12.11</scala.version>

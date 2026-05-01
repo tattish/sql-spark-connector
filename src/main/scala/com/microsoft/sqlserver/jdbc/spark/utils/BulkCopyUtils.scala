@@ -1,22 +1,22 @@
 /**
-* Copyright 2020 and onwards Microsoft Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright 2020 and onwards Microsoft Corporation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.microsoft.sqlserver.jdbc.spark
 
 import com.microsoft.sqlserver.jdbc.spark.utils.JdbcUtils.createConnection
 import com.microsoft.sqlserver.jdbc.{SQLServerBulkCopy, SQLServerBulkCopyOptions}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils.{getSchema, schemaString}
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils.schemaString
 import org.apache.spark.sql.jdbc.JdbcDialects
 import org.apache.spark.sql.types.{ByteType, ShortType}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
@@ -25,14 +25,14 @@ import java.sql.{Connection, ResultSet, ResultSetMetaData, SQLException}
 import scala.collection.mutable.ListBuffer
 
 /**
-* BulkCopyUtils Object implements common utility function used by both datapool and 
-*/
+ * BulkCopyUtils Object implements common utility function used by both datapool and
+ */
 
 object BulkCopyUtils extends Logging {
     /**
-    * savePartition 
-    * Function to write a partition of the dataframe to the database using the BulkWrite APIs. Creates 
-    * a connection, sets connection properties and does a BulkWrite. Called when writing data to 
+    * savePartition
+    * Function to write a partition of the dataframe to the database using the BulkWrite APIs. Creates
+    * a connection, sets connection properties and does a BulkWrite. Called when writing data to
     * master instance and data pools both. URL in options is used to create the relevant connection.
     *
     * @param iterator - iterator for row of the partition.
@@ -40,24 +40,24 @@ object BulkCopyUtils extends Logging {
     * @param options - SQLServerBulkJdbcOptions with url for the connection
     */
 
-    private[spark] def savePartition(
+     private[spark] def savePartition(
         iterator: Iterator[Row],
         tableName: String,
         dfColMetadata: Array[ColumnMetadata],
         options: SQLServerBulkJdbcOptions ): Unit = {
 
-        logDebug("savePartition:Entered")
+         logDebug("savePartition:Entered")
         val conn = createConnection(options)
         conn.setAutoCommit(false)
         conn.setTransactionIsolation(options.isolationLevel)
         var committed = false
 
-        try {
+         try {
             logDebug("savePartition: Calling SQL Bulk Copy to write data")
             val sqlServerBulkCopy = new SQLServerBulkCopy(conn)
             bulkWrite(iterator, tableName, sqlServerBulkCopy, dfColMetadata, options)
 
-            conn.commit()
+             conn.commit()
             committed = true
         } catch {
             case e: SQLException =>
@@ -81,9 +81,9 @@ object BulkCopyUtils extends Logging {
         }
     }
 
-    /**
-    * bulkWrite 
-    * utility function to do set bulk write options (as specified by user) and do a Bulkwrite 
+     /**
+    * bulkWrite
+    * utility function to do set bulk write options (as specified by user) and do a Bulkwrite
     *
     * @param sqlServerBulkCopy - BulkCopy Object initialized with the connection
     * @param iterator - iterator for row of the partition.
@@ -91,7 +91,7 @@ object BulkCopyUtils extends Logging {
     * @param options - SQLServerBulkJdbcOptions with url for the connection
     */
 
-    def bulkWrite(
+     def bulkWrite(
         iterator: Iterator[Row],
         tableName:String,
         sqlServerBulkCopy: SQLServerBulkCopy,
@@ -102,15 +102,15 @@ object BulkCopyUtils extends Logging {
         sqlServerBulkCopy.setBulkCopyOptions(bulkConfig)
         sqlServerBulkCopy.setDestinationTableName(tableName)
 
-        for (i <- 0 to dfColMetadata.length-1) {
+         for (i <- 0 to dfColMetadata.length-1) {
             sqlServerBulkCopy.addColumnMapping(dfColMetadata(i).getName(), dfColMetadata(i).getName())
         }
 
-        val bulkRecord = new DataFrameBulkRecord(iterator, dfColMetadata)
+         val bulkRecord = new DataFrameBulkRecord(iterator, dfColMetadata)
         sqlServerBulkCopy.writeToServer(bulkRecord)
     }
 
-    /**
+     /**
     * handleException
     * utility function to process SQLException
     */
@@ -134,30 +134,30 @@ object BulkCopyUtils extends Logging {
         }
     }
 
-    /**
+     /**
     * checkIsolationLevel
     * utility function to check supported isolation levels in sql server
-    * Isolation levels supported by SQL Server are READ_UNCOMMITTED, READ_COMMITTED, 
+    * Isolation levels supported by SQL Server are READ_UNCOMMITTED, READ_COMMITTED,
     * REPEATABLE_READ, SERIALIZABLE, and SNAPSHOT
-    */  
+    */
     private[spark] def checkIsolationLevel(
-        conn: Connection, 
+        conn: Connection,
         options: SQLServerBulkJdbcOptions): Unit = {
 
-        if (!conn.getMetaData.supportsTransactionIsolationLevel(options.isolationLevel)) {
+         if (!conn.getMetaData.supportsTransactionIsolationLevel(options.isolationLevel)) {
             conn.close()
             throw new SQLException(s"""Isolation level ${options.isolationLevel} not supported by SQL Server""")
         }
     }
 
-    /**
+     /**
     * repartitionDataFrame
-    * utility function to repartition DataFrame to user specified value and throw an exeption 
+    * utility function to repartition DataFrame to user specified value and throw an exeption
     * if numPartition set by user is not correct.
-    */ 
+    */
     private[spark] def repartitionDataFrame(
-        df: DataFrame, 
-        options: SQLServerBulkJdbcOptions): DataFrame = {            
+        df: DataFrame,
+        options: SQLServerBulkJdbcOptions): DataFrame = {
         options.numPartitions match {
             case Some(n) if n <= 0 => throw new IllegalArgumentException(
                 s"""Invalid value '$n' for parameter 'numPartitions'
@@ -166,26 +166,26 @@ object BulkCopyUtils extends Logging {
             case _ => df
         }
     }
-    
-    /**
+
+     /**
     * getEmptyResultSet
-    * utility function to get a empty result. The result set to retrieve the meta data. 
+    * utility function to get a empty result. The result set to retrieve the meta data.
     * TODO : Return  ResultSetMetaData and rename the function to getTableMetaData
     */
     private[spark] def getEmptyResultSet(
-        conn: Connection, 
+        conn: Connection,
         table: String): ResultSet = {
         val queryStr = s"SELECT * FROM ${table} WHERE 1=0;"
         conn.createStatement.executeQuery(queryStr)
     }
 
-    /**
+     /**
     * getComputedCols
     * utility function to get computed columns.
-     * Use computed column names to exclude computed column when matching schema.
+    * Use computed column names to exclude computed column when matching schema.
     */
     private[spark] def getComputedCols(
-        conn: Connection, 
+        conn: Connection,
         table: String): List[String] = {
         val queryStr = s"SELECT name FROM sys.computed_columns WHERE object_id = OBJECT_ID('${table}');"
         val computedColRs = conn.createStatement.executeQuery(queryStr)
@@ -197,7 +197,7 @@ object BulkCopyUtils extends Logging {
         computedCols.toList
     }
 
-    /**
+     /**
      * dfComputedColCount
      * utility function to get number of computed columns in dataframe.
      * Use number of computed columns in dataframe to get number of non computed column in df,
@@ -220,7 +220,7 @@ object BulkCopyUtils extends Logging {
     }
 
 
-    /**
+     /**
      * getColMetadataMap
      * Utility function convert result set meta data to array.
      */
@@ -238,7 +238,7 @@ object BulkCopyUtils extends Logging {
         result
     }
 
-    /**
+     /**
      * getColMetaData returns the columnMetaData that's used when writing the data frame to SQL.
      * Additionally it also supports a schema check between dataframe and sql table. The schema
      * check validates the following
@@ -271,7 +271,7 @@ object BulkCopyUtils extends Logging {
         colMetaData
     }
 
-    /**
+     /**
     * matchSchemas validates the data frame schema against result set of a
     * SQL table that user is trying to write to. The SQL table is considered the source of truth
     * and data frame columns matches against that. The data frame columns can be in a different
@@ -302,12 +302,62 @@ object BulkCopyUtils extends Logging {
           zip df.schema.fieldNames.toList).toMap
         val dfCols = df.schema
 
-        val tableCols = getSchema(rs, JdbcDialects.get(url))
+        // Databricks modifies Spark internals — DBR 15.4 LTS exposes a 4-param signature:
+        //   getSchema(ResultSet, JdbcDialect, Boolean, Boolean)
+        // Standard open-source Spark 3.5 uses a 2-param signature:
+        //   getSchema(ResultSet, JdbcDialect)
+        // Standard open-source Spark 3.4 uses a 3-param signature:
+        //   getSchema(ResultSet, JdbcDialect, Boolean)
+        // We use reflection to detect which is available at runtime.
+        val dialect = JdbcDialects.get(url)
+        val jdbcUtilsInstance = org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
+        val jdbcUtilsClass = jdbcUtilsInstance.getClass
+        val allMethods = jdbcUtilsClass.getDeclaredMethods.filter(_.getName == "getSchema")
+
+        // Known signatures across Spark/Databricks versions:
+        // DBR 15.4 LTS (5-param): getSchema(Connection, ResultSet, JdbcDialect, Boolean, Boolean)
+        // Spark 3.4 OSS (3-param): getSchema(ResultSet, JdbcDialect, Boolean)
+        // Spark 3.5 OSS (2-param): getSchema(ResultSet, JdbcDialect)
+        val fiveParam  = allMethods.find(_.getParameterCount == 5)
+        val threeParam = allMethods.find(_.getParameterCount == 3)
+        val twoParam   = allMethods.find(_.getParameterCount == 2)
+
+        val tableCols = if (fiveParam.isDefined) {
+            // DBR 15.4 LTS: getSchema(Connection, ResultSet, JdbcDialect, alwaysNullable, isTimestampNTZ)
+            // conn is available in the outer scope via getEmptyResultSet's connection
+            // We re-use the ResultSet's Statement's Connection
+            val connFromRs = rs.getStatement.getConnection
+            fiveParam.get.setAccessible(true)
+            fiveParam.get.invoke(jdbcUtilsInstance,
+                connFromRs, rs, dialect,
+                java.lang.Boolean.FALSE,
+                java.lang.Boolean.FALSE
+            ).asInstanceOf[org.apache.spark.sql.types.StructType]
+        } else if (twoParam.isDefined) {
+            // Spark 3.5 OSS: getSchema(ResultSet, JdbcDialect)
+            twoParam.get.setAccessible(true)
+            twoParam.get.invoke(jdbcUtilsInstance, rs, dialect
+            ).asInstanceOf[org.apache.spark.sql.types.StructType]
+        } else if (threeParam.isDefined) {
+            // Spark 3.4 OSS: getSchema(ResultSet, JdbcDialect, alwaysNullable)
+            threeParam.get.setAccessible(true)
+            threeParam.get.invoke(jdbcUtilsInstance, rs, dialect,
+                java.lang.Boolean.FALSE
+            ).asInstanceOf[org.apache.spark.sql.types.StructType]
+        } else {
+            val allMethodNames = allMethods.map(m =>
+                s"${m.getName}(${m.getParameterTypes.map(_.getName).mkString(", ")})"
+            ).mkString("\n  ")
+            throw new RuntimeException(
+                s"Could not find a compatible JdbcUtils.getSchema method on class ${jdbcUtilsClass.getName}.\n" +
+                s"All getSchema methods:\n  ${allMethodNames}")
+        }
+
         val computedCols = getComputedCols(conn, dbtable)
 
-        val prefix = "Spark Dataframe and SQL Server table have differing"
+         val prefix = "Spark Dataframe and SQL Server table have differing"
 
-        if (computedCols.length == 0) {
+         if (computedCols.length == 0) {
             assertIfCheckEnabled(dfCols.length == tableCols.length, strictSchemaCheck,
                 s"${prefix} numbers of columns")
         } else if (strictSchemaCheck) {
@@ -321,10 +371,10 @@ object BulkCopyUtils extends Logging {
         }
 
 
-        val result = new Array[ColumnMetadata](tableCols.length - computedCols.length)
+         val result = new Array[ColumnMetadata](tableCols.length - computedCols.length)
         var nonAutoColIndex = 0
 
-        for (i <- 0 to tableCols.length-1) {
+         for (i <- 0 to tableCols.length-1) {
             val tableColName = tableCols(i).name
             var dfFieldIndex = -1
             // set dfFieldIndex = -1 for all computed columns to skip ColumnMetadata
@@ -349,7 +399,7 @@ object BulkCopyUtils extends Logging {
                         '${dfColName}' at column index ${i} (case insensitive)""")
                 }
 
-                logDebug(s"matching Df column index $dfFieldIndex datatype ${dfCols(dfFieldIndex).dataType} " +
+                 logDebug(s"matching Df column index $dfFieldIndex datatype ${dfCols(dfFieldIndex).dataType} " +
                     s"to table col index $i datatype ${tableCols(i).dataType}")
                 if(dfCols(dfFieldIndex).dataType == ByteType && tableCols(i).dataType == ShortType) {
                     // TinyInt translates to spark ShortType. Refer https://github.com/apache/spark/pull/27172
@@ -372,7 +422,7 @@ object BulkCopyUtils extends Logging {
                         s" DF col ${dfColName} nullable config is ${dfCols(dfFieldIndex).nullable} " +
                         s" Table col ${tableColName} nullable config is ${tableCols(i).nullable}")
 
-                // Schema check passed for element, Create ColMetaData only for non auto generated column
+                 // Schema check passed for element, Create ColMetaData only for non auto generated column
                 result(nonAutoColIndex) = new ColumnMetadata(
                     rs.getMetaData().getColumnName(i+1),
                     rs.getMetaData().getColumnType(i+1),
@@ -386,7 +436,7 @@ object BulkCopyUtils extends Logging {
         result
     }
 
-    /**
+     /**
      * utility to extract 3 part name from tablename in options.
      * A fully qualified table name can be a
      * 1 part (mytable) ,
@@ -403,7 +453,7 @@ object BulkCopyUtils extends Logging {
             }
     }
 
-    /**
+     /**
      * utility function to check that table type is inline with the user specified options.
      * The check raises an exception if the user options are trying to write a REPLICATED
      * table to a ROUND ROBIN table or vice versa.
@@ -424,7 +474,7 @@ object BulkCopyUtils extends Logging {
                         "External table is not of the type ROUND_ROBIN")
                 }
 
-                case _ => {
+                 case _ => {
                     throw new SQLException(
                         s""" Invalid value in dataPoolDistPolicy ${options.dataPoolDistPolicy}  .
                            | Internal feature usage error:""".stripMargin)
@@ -433,7 +483,7 @@ object BulkCopyUtils extends Logging {
         }
     }
 
-    /**
+     /**
      * utility to get external table type from SQL
      */
     object DataPoolTableType {
@@ -441,7 +491,7 @@ object BulkCopyUtils extends Logging {
         val ROUND_ROBIN_TABLES = 2
     }
 
-    def getExternalTableType(conn:Connection, schemaName:String, tableName:String) : Int = {
+     def getExternalTableType(conn:Connection, schemaName:String, tableName:String) : Int = {
         val stmt = conn.createStatement()
         val queryStr = s"select distribution_type FROM sys.external_tables where " +
                             s"schema_name(schema_id)='$schemaName' and name='$tableName'"
@@ -451,7 +501,7 @@ object BulkCopyUtils extends Logging {
         tableType
     }
 
-    /**
+     /**
      * utility to do an executeUpdate on provided SQL string
      * @param conn - connection to database
      * @param updateString - SQL string to run
@@ -474,13 +524,13 @@ object BulkCopyUtils extends Logging {
         }
     }
 
-    /**
+     /**
     * utility function to truncate table
     * @param conn - connection to database
     * @param dbtable table name to truncate
-    */ 
+    */
     private[spark] def mssqlTruncateTable(
-        conn: Connection, 
+        conn: Connection,
         dbtable: String): Unit = {
         logDebug(s"Truncating table ${dbtable}")
         val truncateTableStr = s"TRUNCATE TABLE ${dbtable}"
@@ -488,7 +538,7 @@ object BulkCopyUtils extends Logging {
         logDebug("Truncating table succeeded")
     }
 
-    /**
+     /**
     * utility function to create a table from dataframe
     * @param conn - connection to database
     * @param df - dataframe to contruct the schema
@@ -505,7 +555,7 @@ object BulkCopyUtils extends Logging {
         logDebug("Creating table succeeded")
     }
 
-    /**
+     /**
      * utility function to create an external table from dataframe
      * DataSource should be precreated to use this function.
      * @param conn - connection to database
@@ -524,7 +574,7 @@ object BulkCopyUtils extends Logging {
         logDebug("Creating external table succeeded")
     }
 
-    /**
+     /**
      * utility function to create a datasource at sqldatapool://controller-svc/default.
      * Assumes that datasource with that name does not exist
      * @param conn - connection to database
@@ -543,7 +593,7 @@ object BulkCopyUtils extends Logging {
         logDebug("Creating datasource succeeded")
     }
 
-    /**
+     /**
      * checks if datasource exists
      * @param conn - connection to database
      * @param df - dataframe to contruct the schema
@@ -571,15 +621,15 @@ object BulkCopyUtils extends Logging {
         }
     }
 
-    /**
+     /**
     * utility function retrieve bulk copy options from user options
     * @param options - full set of user options
-    */ 
+    */
     private def getBulkCopyOptions(
         options: SQLServerBulkJdbcOptions): SQLServerBulkCopyOptions = {
         val bulkCopyOptions = new SQLServerBulkCopyOptions
 
-        bulkCopyOptions.setBatchSize(options.batchSize)
+         bulkCopyOptions.setBatchSize(options.batchSize)
         bulkCopyOptions.setBulkCopyTimeout(options.queryTimeout)
         bulkCopyOptions.setCheckConstraints(options.checkConstraints)
         bulkCopyOptions.setFireTriggers(options.fireTriggers)
@@ -588,30 +638,30 @@ object BulkCopyUtils extends Logging {
         bulkCopyOptions.setTableLock(options.tableLock)
         bulkCopyOptions.setAllowEncryptedValueModifications(options.allowEncryptedValueModifications)
 
-        bulkCopyOptions
+         bulkCopyOptions
     }
 
-    /**
+     /**
     * utility function to dbname from user specified URL
     * @param url - url per syntax <jdbc>:<sqlserver>:<hostname>:<port>;database=<dbname>;...
-    */     
+    */
     private[spark] def getDBNameFromURL(
         url:String) : String = {
         val token_sep = ";"
-        val dbname_index = 1 
+        val dbname_index = 1
 
-        val dbstring = url.split(token_sep)(dbname_index)     
-        val dbname = dbstring.split("=")(1) 
+         val dbstring = url.split(token_sep)(dbname_index)
+        val dbname = dbstring.split("=")(1)
         return dbname
     }
 
-    /**
+     /**
     * utility to assert a condition and throw an exception if assert fails
     * @param cond - condition
     * @param msg - message to pass in the SQLException
-    */ 
+    */
 
-    private def assertCondition(
+     private def assertCondition(
         cond: Boolean, msg: String): Unit = {
         try {
             assert(cond)
@@ -622,13 +672,13 @@ object BulkCopyUtils extends Logging {
         }
     }
 
-    /**
+     /**
      * utility to assert if checkEnabled is true, else info log the mesage
      * @param cond - condition
      * @param msg - message to pass in the SQLException
      */
 
-    private def assertIfCheckEnabled(
+     private def assertIfCheckEnabled(
             cond: Boolean, checkEnabled : Boolean,  msg: String): Unit = {
         if(checkEnabled) {
             assertCondition(cond, msg)
@@ -637,5 +687,5 @@ object BulkCopyUtils extends Logging {
            logInfo(msg)
         }
 
-    }
+     }
 }
